@@ -1,0 +1,5 @@
+{
+  "name": "Passport Photo Generator",
+  "description": "An AI-powered tool to convert any uploaded image into a professional, ultra HD 4K passport-sized photo with a black suit and a light grey background.",
+  "requestFramePermissions": []
+}

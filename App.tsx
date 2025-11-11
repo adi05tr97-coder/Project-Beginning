@@ -1,0 +1,130 @@
+
+import React, { useState, useCallback } from 'react';
+import { Header } from './components/Header';
+import { ImageUploader } from './components/ImageUploader';
+import { ResultDisplay } from './components/ResultDisplay';
+import { Button } from './components/Button';
+import { Spinner } from './components/Spinner';
+import { generatePassportPhoto } from './services/geminiService';
+import { fileToGenerativePart } from './utils/fileUtils';
+import type { FileDetails } from './types';
+
+const App: React.FC = () => {
+  const [originalImage, setOriginalImage] = useState<FileDetails | null>(null);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleImageSelect = (file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setOriginalImage({
+        file: file,
+        previewUrl: reader.result as string,
+      });
+      setGeneratedImage(null);
+      setError(null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleGenerateClick = useCallback(async () => {
+    if (!originalImage) {
+      setError('Please upload an image first.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setGeneratedImage(null);
+
+    try {
+      const imagePart = await fileToGenerativePart(originalImage.file);
+      const generatedData = await generatePassportPhoto(imagePart);
+      if (generatedData) {
+        setGeneratedImage(`data:image/jpeg;base64,${generatedData}`);
+      } else {
+        throw new Error('The AI model did not return an image. Please try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [originalImage]);
+
+  const handleReset = () => {
+    setOriginalImage(null);
+    setGeneratedImage(null);
+    setError(null);
+    setIsLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 font-sans">
+      <Header />
+      <main className="container mx-auto px-4 py-8 md:py-12">
+        <div className="max-w-4xl mx-auto bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
+          <div className="p-6 md:p-10">
+            {!originalImage ? (
+              <ImageUploader onImageSelect={handleImageSelect} />
+            ) : (
+              <div className="grid md:grid-cols-2 gap-8 items-center">
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Original Image</h3>
+                  <img
+                    src={originalImage.previewUrl}
+                    alt="Original upload"
+                    className="rounded-lg shadow-md max-h-96 w-auto mx-auto"
+                  />
+                </div>
+                <div className="flex flex-col items-center justify-center h-full">
+                  {isLoading && (
+                    <div className="text-center">
+                       <Spinner />
+                       <p className="mt-4 text-lg font-medium text-indigo-600 dark:text-indigo-400">Generating your photo...</p>
+                       <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">This may take a moment.</p>
+                    </div>
+                  )}
+                  {error && (
+                    <div className="bg-red-100 dark:bg-red-900 border-l-4 border-red-500 text-red-700 dark:text-red-200 p-4 rounded-r-lg w-full" role="alert">
+                      <p className="font-bold">Error</p>
+                      <p>{error}</p>
+                    </div>
+                  )}
+                  {generatedImage && !isLoading && (
+                    <ResultDisplay generatedImage={generatedImage} />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          {originalImage && (
+             <div className="bg-gray-50 dark:bg-gray-800/50 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-center gap-4">
+               <Button
+                 onClick={handleGenerateClick}
+                 disabled={isLoading}
+                 className="w-full sm:w-auto"
+               >
+                 {isLoading ? 'Generating...' : generatedImage ? 'Generate Again' : '✨ Generate Passport Photo'}
+               </Button>
+               <Button
+                 onClick={handleReset}
+                 variant="secondary"
+                 className="w-full sm:w-auto"
+               >
+                 Upload New Image
+               </Button>
+             </div>
+          )}
+        </div>
+        <footer className="text-center mt-12 text-gray-500 dark:text-gray-400 text-sm">
+            <p>Powered by Google Gemini. Photos are generated by AI.</p>
+        </footer>
+      </main>
+    </div>
+  );
+};
+
+export default App;
